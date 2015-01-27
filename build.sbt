@@ -2,11 +2,11 @@ resolvers += bintray.Opts.resolver.repo("embulk", "maven")
 
 scalaVersion := "2.11.4"
 
-name := "embulk-plugin-sam"
+name := "embulk-plugin-bio"
 
 organization := "org.xerial.embulk"
 
-description := "Embulk plugin for converting SAM format to BAM"
+description := "Embulk plugin for converting biological data"
 
 crossPaths := false
 
