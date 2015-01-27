@@ -115,5 +115,5 @@ class UCSCAnnotationInputPlugin extends InputPlugin {
     // TODO get commit report
     null
   }
- 
+
 }
