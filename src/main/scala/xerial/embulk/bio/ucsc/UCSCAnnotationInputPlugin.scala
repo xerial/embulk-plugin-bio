@@ -1,6 +1,8 @@
 package xerial.embulk.bio.ucsc
 
+import java.io.{FileNotFoundException, StringReader, InputStreamReader}
 import java.net.URL
+import java.util.zip.GZIPInputStream
 import javax.validation.constraints.NotNull
 
 import com.fasterxml.jackson.annotation.JacksonInject
@@ -9,6 +11,7 @@ import org.embulk.config._
 import org.embulk.spi.InputPlugin.Control
 import org.embulk.spi._
 import java.{util => ju}
+import java.{lang => jl}
 
 import org.embulk.spi.`type`.{DoubleType, StringType, LongType, Type}
 import xerial.core.io.IOUtil
@@ -94,11 +97,11 @@ class UCSCAnnotationInputPlugin extends InputPlugin {
       val createTableStmt = download(sqlUrl)
 
       // Create a schema of the file
-      val column = ImmutableList.of[Column]()
-      val schema = new Schema(column)
+      val schema = buildSchema(createTableStmt)
+
+      // Run input task
       val source = task.dump()
       source.set("url", s"${urlPrefix}/${a}.txt.gz")
-
       control.run(task.dump, schema, 1)
     }
     Exec.newNextConfig()
@@ -108,12 +111,43 @@ class UCSCAnnotationInputPlugin extends InputPlugin {
 
     val dataUrl = taskSource.get(classOf[String], "url")
 
-    // TODO download data
+    val pageBuilder = new PageBuilder(Exec.getBufferAllocator, schema, output)
+    val report = Exec.newCommitReport()
+    try {
+      // Download .txt.gz data
+      for (line <- scala.io.Source.fromInputStream(new GZIPInputStream(new URL(dataUrl).openStream())).getLines()) {
+        val cols = line.split("\t")
+        for ((c, i) <- cols.zipWithIndex) {
+          try {
+            // Write record
+            schema.visitColumns(new SchemaVisitor {
+              override def doubleColumn(column: Column): Unit = pageBuilder.setDouble(i, c.toDouble)
+              override def timestampColumn(column: Column): Unit = pageBuilder.setTimestamp(i, null) // TODO
+              override def booleanColumn(column: Column): Unit = pageBuilder.setBoolean(i, c.toBoolean)
+              override def longColumn(column: Column): Unit = pageBuilder.setLong(i, c.toLong)
+              override def stringColumn(column: Column): Unit = pageBuilder.setString(i, c)
+            })
+          }
+          catch {
+            // Set null if some error happens
+            case e: IllegalArgumentException =>
+              pageBuilder.setNull(i)
+            case e: NumberFormatException =>
+              pageBuilder.setNull(i)
+          }
+          pageBuilder.addRecord()
+        }
+      }
+    }
+    catch {
+      case e: FileNotFoundException =>
+        report.set("error", e)
+    }
+    finally {
+      pageBuilder.finish()
+    }
 
-    // TODO output data to PageOutput
-
-    // TODO get commit report
-    null
+    report
   }
 
 }
