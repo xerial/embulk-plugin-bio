@@ -1,4 +1,4 @@
-package org.xerial.embulk.sam
+package xerial.embulk.bio.ucsc
 
 import java.net.URL
 import javax.validation.constraints.NotNull
